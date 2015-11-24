@@ -1,0 +1,14 @@
+*.xaml
+MP5/MP5.vcxproj
+*.filters
+MP5/MP5.vcxproj.user
+*.png
+MP5/Readme/readme.html
+MP5/Readme/stylesheet.css
+MP5.opensdf
+*.sdf
+MP5.sln
+*.suo
+MP5/Debug/MP5.log
+*.txt
+MP5/Source.cpp
