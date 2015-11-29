@@ -1,16 +1,16 @@
 #include "threadManager.h"
 
-ThreadManager::ThreadManager(int RequestsPerPerson, int SizeOfBuffer, int NumberOfWorkers)
+ThreadManager::ThreadManager(int RequestsPerPerson, int SizeOfBuffer, int NumberOfRequestChannels)
 {
 
 	m_requestsPerPerson = RequestsPerPerson;
 	m_sizeOfBuffer = SizeOfBuffer;
-	m_numberOfWorkers = NumberOfWorkers;
+	m_numberOfRequestChannels = NumberOfRequestChannels;
 
 	finish1 = false;
 	finish2 = false;
 	finish3 = false;
-	// printf("This application supports:\n\tRequests Per Person: %d\n\tBuffer Size: %d\n\tTotal Worker Threads: %d\n",m_requestsPerPerson, m_sizeOfBuffer, m_numberOfWorkers);
+	// printf("This application supports:\n\tRequests Per Person: %d\n\tBuffer Size: %d\n\tTotal Worker Threads: %d\n",m_requestsPerPerson, m_sizeOfBuffer, m_numberOfRequestChannels);
 
 	// printf("Establishing control channel... ");
 	m_controlChannel = new RequestChannel("control", RequestChannel::CLIENT_SIDE);
@@ -35,7 +35,7 @@ void ThreadManager::StartClient()
 {
 	printf("Started Client\n ");
 
-	initWorkerThreads();
+	initEventThread();
 
 	initStatisticsThreads();
 
@@ -58,15 +58,91 @@ void ThreadManager::enqueueRequestBuffer(string personRequested)
 	}
 }
 
-void ThreadManager::dequeueRequestBufferEnqueueResponseBuffer(string strRequestChannel)
+void ThreadManager::dequeueRequestBufferEnqueueResponseBuffer()
 {
-	RequestChannel dataChan(strRequestChannel, RequestChannel::CLIENT_SIDE);
+	vector<RequestChannel*> v_allRequestChannels;
+	vector<int> v_readInts;
+	vector<int> v_writeInts;
+	int maxReadVal = -1;
+	int maxWriteVal = -1;
 
-	while(!v_requestBuffer->isDone()){
+	fd_set readfs;
+	fd_set writefs;
+
+	FD_ZERO(&readfs);
+	FD_ZERO(&writefs);
+
+	FD_SET(STDIN, &readfs);
+	FD_SET(STDIN, &writefs);
+
+	// We need to make and save the new request channels from the given size
+	for (int i = 0; i < m_numberOfRequestChannels; ++i) {
+		// Create new channels server side;
+		string strServerThreadRequest = m_controlChannel->send_request("newthread");
+
+		RequestChannel* dataChan = new RequestChannel(strServerThreadRequest, RequestChannel::CLIENT_SIDE);
+		//Instantiate our request channels
+		v_allRequestChannels.push_back(dataChan);
+
+		int readInt = v_allRequestChannels[i]->read_fd();
+ 		v_readInts.push_back(readInt);
+		if (readInt > maxReadVal) {
+			maxReadVal = readInt;
+		}
+
+		int writeInt = v_allRequestChannels[i]->write_fd();
+		v_writeInts.push_back(writeInt);
+		if (writeInt > maxWriteVal) {
+			maxWriteVal = writeInt;
+		}
+
+		// We need to save all of the read/write file descriptors from all of the request channels
+		FD_SET(v_allRequestChannels[i]->read_fd(), &readfs);
+		FD_SET(v_allRequestChannels[i]->write_fd(), &writefs);
+	}
+	
+
+	while(!v_requestBuffer->isDone())
+	{
+		fd_set read_dup = readfs;
+		fd_set write_dup = writefs;
+
+		int wNum = select(maxWriteVal + 1, NULL, &write_dup, NULL, NULL);
+
+		int writePlace = -1;
+		for (int i = 0; i < m_numberOfRequestChannels; ++i) {
+			if (FD_ISSET(v_allRequestChannels[i]->write_fd(), &writefs)) {
+				writePlace = i;
+				break;
+			}
+		}
+
+		if (writePlace == -1) continue;
+
 		RequestPackage newPackage = v_requestBuffer->V();
 		newPackage.requestDequed = clock();
 		if (v_requestBuffer->isDone()) break;
-		string strReply = dataChan.send_request("data " + newPackage.personRequested);
+
+		// Using the open channel found using the select, we get the file descriptor and call cread and cwrite to get the information, which will then be saved to 
+		v_allRequestChannels[writePlace]->cwrite("data " + newPackage.personRequested);
+
+		int rNum = select(maxReadVal + 1, &read_dup, NULL, NULL, NULL);
+		
+
+		if (rNum < 1 && wNum < 1) continue;
+		//We need to check all of the file descriptors using select to ensure which channel we will use.
+		int readPlace = -1;
+		for (int i = 0; i < m_numberOfRequestChannels; ++i) {
+			if (FD_ISSET(v_allRequestChannels[i]->read_fd(), &read_dup)) {
+				readPlace = i;
+				break;
+			}
+		}
+
+		if (readPlace == -1) continue;
+
+		string strReply = v_allRequestChannels[readPlace]->cread();
+		//string strReply = "99";
 		newPackage.serverResponse = strReply;
 		newPackage.requestReplied = clock();
 
@@ -82,8 +158,8 @@ void ThreadManager::dequeueRequestBufferEnqueueResponseBuffer(string strRequestC
 		}
 	}
 
-	string reply7 = dataChan.send_request("quit");
-	// cout << "Reply to request 'quit' is '" << reply7 << "'" << endl;
+	//We need to quit all of the request channels.
+	for (auto& t : v_allRequestChannels) t->send_request("quit");
 }
 
 void ThreadManager::dequeueResponseBuffer1(){
@@ -134,23 +210,16 @@ void ThreadManager::dequeueResponseBuffer3(){
 }
 
 void ThreadManager::initRequestThreads(){
-	std::thread requestThread1 (&ThreadManager::enqueueRequestBuffer, this, "Joe Smith");
-	std::thread requestThread2 (&ThreadManager::enqueueRequestBuffer, this, "Jane Smith");
-	std::thread requestThread3 (&ThreadManager::enqueueRequestBuffer, this, "John Doe");
-	requestThread1.join();
-	requestThread2.join();
-	requestThread3.join();
+	v_requestThreads.push_back(std::thread (&ThreadManager::enqueueRequestBuffer, this, "Joe Smith"));
+	v_requestThreads.push_back(std::thread (&ThreadManager::enqueueRequestBuffer, this, "Jane Smith"));
+	v_requestThreads.push_back(std::thread (&ThreadManager::enqueueRequestBuffer, this, "John Doe"));
+	
 }
 
 
 
-void ThreadManager::initWorkerThreads(){
-	for (int i = 0; i < m_numberOfWorkers; ++i){
-		string strServerThreadRequest = m_controlChannel->send_request("newthread");
-		// cout << "Reply to request 'newthread' is " << strServerThreadRequest << "'" << endl;
-
-		v_workerThreads.push_back(std::thread(&ThreadManager::dequeueRequestBufferEnqueueResponseBuffer, this, strServerThreadRequest));
-	}
+void ThreadManager::initEventThread(){
+	EventThread = new std::thread(&ThreadManager::dequeueRequestBufferEnqueueResponseBuffer, this);
 }
 
 void ThreadManager::initStatisticsThreads(){
@@ -163,7 +232,7 @@ void ThreadManager::checkClose(){
 	int i = 0;
 	while (finish1 == false || finish2 == false || finish3 == false){
 		if(i%1000000==0){
-			printf("Loading...\n");
+			//printf("Loading...\n");
 			i = 0;
 		}
 		i++;
@@ -175,11 +244,6 @@ void ThreadManager::checkClose(){
 
 void ThreadManager::clientCloser(){
 	std::string strUserInput;
-	// while (cin>>strUserInput){
-	// 	if (strUserInput == "quit"){
-	// 		break;
-	// 	}
-	// }
 
 	v_requestBuffer->setDone(true);
 	v_responseBuffer1->setDone(true);
@@ -187,14 +251,10 @@ void ThreadManager::clientCloser(){
 	v_responseBuffer3->setDone(true);
 
 	joinRequestThreads();
-	// printf("NOTICE: Request threads complete!\n");
-	joinWorkerThreads();
-	// printf("NOTICE: Worker threads complete!\n");
+	joinEventThread();
 	joinStatisticsThreads();
-	// printf("NOTICE: Statistics threads complete!\n");
 
 	string reply = m_controlChannel->send_request("quit");
-	// cout << "Reply to request 'quit' is '" << reply << "'" << endl;
 
 	usleep(100000); //Just for print formatting.
 
@@ -207,10 +267,10 @@ void ThreadManager::clientCloser(){
 
 
 void ThreadManager::joinRequestThreads(){
-
+	for (auto& t : v_requestThreads) t.join();
 }
 
-void ThreadManager::joinWorkerThreads(){
+void ThreadManager::joinEventThread(){
 	for (auto& t: v_workerThreads) t.join();
 }
 

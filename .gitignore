@@ -12,3 +12,8 @@ MP5.sln
 MP5/Debug/MP5.log
 *.txt
 MP5/Source.cpp
+Readme/stylesheet.css
+Readme/readme.html
+*.user
+MP5.vcxproj
+*.log

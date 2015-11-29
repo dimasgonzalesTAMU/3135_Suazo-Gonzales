@@ -18,8 +18,12 @@ class ThreadManager
 #include <algorithm>
 #include <assert.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include "reqchannel.h"
 #include "semaphore.h"
+
+#define STDIN 0  // file descriptor for standard input
 
 class ThreadManager
 {
@@ -38,6 +42,7 @@ class ThreadManager
 		std::vector<RequestPackage> v_requestBuffer2Results;
 		std::vector<RequestPackage> v_requestBuffer3Results;
 
+		std::vector<std::thread> v_requestThreads;
 		std::vector<std::thread> v_workerThreads;
 		std::vector<std::thread> v_staticticsThreads;
 		std::vector<RequestChannel> v_workerChannels;
@@ -48,25 +53,27 @@ class ThreadManager
 		Semaphore* v_responseBuffer2;
 		Semaphore* v_responseBuffer3;
 
+		std::thread* EventThread;
+
 		int m_requestsPerPerson;
 		int m_sizeOfBuffer;
-		int m_numberOfWorkers;
+		int m_numberOfRequestChannels;
 
 		void enqueueRequestBuffer(string personRequested);
-		void dequeueRequestBufferEnqueueResponseBuffer(string strRequestChannel);
+		void dequeueRequestBufferEnqueueResponseBuffer();
 		void dequeueResponseBuffer1();
 		void dequeueResponseBuffer2();
 		void dequeueResponseBuffer3();
 
 		void initRequestThreads();
-		void initWorkerThreads();
+		void initEventThread();
 		void initStatisticsThreads();
 
 		void checkClose();
 		void clientCloser();
 
 		void joinRequestThreads();
-		void joinWorkerThreads();
+		void joinEventThread();
 		void joinStatisticsThreads();
 
 		void processResults(std::vector<RequestPackage> reqPacks);

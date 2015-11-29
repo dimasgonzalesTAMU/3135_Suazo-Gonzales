@@ -8,7 +8,7 @@
 /*Global Options*/
 int RequestsPerPerson;
 int SizeOfBuffer;
-int NumberOfWorkers;
+int NumberOfRequestChannels;
 void getOption(int argc, char *argv[ ])
 {
     char option;
@@ -24,7 +24,7 @@ void getOption(int argc, char *argv[ ])
                   SizeOfBuffer = atoi(optarg);
                   break;
 			  case 'w' :
-                  NumberOfWorkers = atoi(optarg);
+                  NumberOfRequestChannels = atoi(optarg);
                   break;
               case '?':
                   if (optarg == "n" || optarg == "b" || optarg == "w")
@@ -38,7 +38,7 @@ void getOption(int argc, char *argv[ ])
 
     if(RequestsPerPerson == 0) RequestsPerPerson = 100000;
     if(SizeOfBuffer == 0) SizeOfBuffer = 100;
-    if(NumberOfWorkers == 0) NumberOfWorkers = 40;
+    if(NumberOfRequestChannels == 0) NumberOfRequestChannels = 40;
 
 }
 
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
         }
         else if (pid > 0) // parent process
         {
-    		ThreadManager threadManager(RequestsPerPerson, SizeOfBuffer, NumberOfWorkers);
+    		ThreadManager threadManager(RequestsPerPerson, SizeOfBuffer, NumberOfRequestChannels);
             // ThreadManager threadManager(100000, 100, 40);
             threadManager.StartClient();
         }
