@@ -83,15 +83,4 @@ class ThreadManager
 		bool finish3;
 };
 
-// class RequestThread
-// {
-// public:
-// 	RequestThread();
-// 	~RequestThread();
-//
-// private:
-//
-// }
-
-
 #endif

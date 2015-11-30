@@ -36,9 +36,9 @@ void getOption(int argc, char *argv[ ])
           }
     }
 
-    if(RequestsPerPerson == 0) RequestsPerPerson = 100000;
+    if(RequestsPerPerson == 0) RequestsPerPerson = 10000;
     if(SizeOfBuffer == 0) SizeOfBuffer = 100;
-    if(NumberOfRequestChannels == 0) NumberOfRequestChannels = 40;
+    if(NumberOfRequestChannels == 0) NumberOfRequestChannels = 10;
 
 }
 

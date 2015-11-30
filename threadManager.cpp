@@ -100,7 +100,7 @@ void ThreadManager::dequeueRequestBufferEnqueueResponseBuffer()
 		FD_SET(v_allRequestChannels[i]->read_fd(), &readfs);
 		FD_SET(v_allRequestChannels[i]->write_fd(), &writefs);
 	}
-	
+
 
 	while(!v_requestBuffer->isDone())
 	{
@@ -123,11 +123,11 @@ void ThreadManager::dequeueRequestBufferEnqueueResponseBuffer()
 		newPackage.requestDequed = clock();
 		if (v_requestBuffer->isDone()) break;
 
-		// Using the open channel found using the select, we get the file descriptor and call cread and cwrite to get the information, which will then be saved to 
+		// Using the open channel found using the select, we get the file descriptor and call cread and cwrite to get the information, which will then be saved to
 		v_allRequestChannels[writePlace]->cwrite("data " + newPackage.personRequested);
 
 		int rNum = select(maxReadVal + 1, &read_dup, NULL, NULL, NULL);
-		
+
 
 		if (rNum < 1 && wNum < 1) continue;
 		//We need to check all of the file descriptors using select to ensure which channel we will use.
@@ -213,7 +213,7 @@ void ThreadManager::initRequestThreads(){
 	v_requestThreads.push_back(std::thread (&ThreadManager::enqueueRequestBuffer, this, "Joe Smith"));
 	v_requestThreads.push_back(std::thread (&ThreadManager::enqueueRequestBuffer, this, "Jane Smith"));
 	v_requestThreads.push_back(std::thread (&ThreadManager::enqueueRequestBuffer, this, "John Doe"));
-	
+
 }
 
 
@@ -284,7 +284,7 @@ void ThreadManager::processResults(std::vector<RequestPackage> requestPackages)
 	float averagetimeInRequestBuffer = 0.00;
 	float averagetimeForReply = 0.00;
 	float averagetimeInResponseBuffer = 0.00;
-	std::vector<double> v_responseDistribution(5,0);
+	std::vector<int> v_responseDistribution(5,0);
  	for(auto& pack: requestPackages){
 		averagetimeInRequestBuffer += (((float)(pack.requestDequed - pack.requestEnqued))/CLOCKS_PER_SEC);
 		averagetimeForReply += (((float)(pack.requestReplied - pack.requestDequed))/CLOCKS_PER_SEC);
@@ -302,22 +302,16 @@ void ThreadManager::processResults(std::vector<RequestPackage> requestPackages)
 	averagetimeForReply = averagetimeForReply/requestPackages.size();
 	averagetimeInResponseBuffer = averagetimeInResponseBuffer/requestPackages.size();
 
-	for(auto& resp: v_responseDistribution){
-		resp = (resp/requestPackages.size())*100;
-	}
-
 	printf("\n%s spent an average of:\n\t%f seconds in the Request Buffer\n\t%f seconds waiting for a Reply\n\t%f seconds in the Response Buffer\n",
 		personRequested.c_str(), averagetimeInRequestBuffer, averagetimeForReply, averagetimeInResponseBuffer);
 
-	printf("With %lu responses the replies were distributed as shown below...(one * means about %lu responses)", requestPackages.size(), requestPackages.size()/100 );
+	printf("With %lu responses the replies were distributed as shown below...", requestPackages.size() );
 	int scale = 0;
 	for(auto& count: v_responseDistribution){
 		int range = scale*20;
-		if(range==0) printf("\nValues greater than 00:");
-		else printf("\nValues greater than %i:", range);
-		for(int i = 0; i < count; i++){
-			printf("*");
-		}
+		if(range==0) printf("\n\tValues greater than 00: %i", count);
+		else printf("\n\tValues greater than %i: %i", range, count);
+
 		scale++;
 	}
 	printf("\n");
